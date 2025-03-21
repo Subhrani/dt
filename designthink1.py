@@ -1,8 +1,9 @@
 import requests
-import pymupdf  # PyMuPDF
-fitz=pymupdf
+import fitz  # PyMuPDF
 from fpdf import FPDF
+import os
 
+# API Credentials
 API_KEY = "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"
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -10,9 +11,7 @@ def extract_text_from_pdf(pdf_path):
     """Extracts text from a PDF file."""
     try:
         doc = fitz.open(pdf_path)
-        text = ""
-        for page in doc:
-            text += page.get_text("text") + "\n"
+        text = "\n".join(page.get_text("text") for page in doc)
         return text.strip()
     except Exception as e:
         print(f"❌ Error reading PDF: {e}")
@@ -49,44 +48,49 @@ def generate_questions(text):
         "max_tokens": 700
     }
     
-    response = requests.post(API_URL, headers=headers, json=data)
-    
-    if response.status_code == 200:
+    try:
+        response = requests.post(API_URL, headers=headers, json=data)
+        response.raise_for_status()  # Raises an error for non-200 responses
         return response.json()["choices"][0]["message"]["content"]
-    else:
-        print(f"❌ API Error: {response.json()}")
+    except requests.exceptions.RequestException as e:
+        print(f"❌ API Error: {e}")
         return "Error generating questions"
 
-def create_question_paper(questions, details, logo_path=r"C:\Users\SUBHA\Downloads\designthinking\LOGO.jpg"):
+def create_question_paper(questions, details, logo_path=None):
     """Creates a formatted question paper in PDF format."""
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     pdf.set_font("Arial", "B", 12)
 
-    # Add default logo (if exists)
-    if logo_path and logo_path.strip():
+    # Add logo if it exists
+    if logo_path and os.path.exists(logo_path):
         try:
             pdf.image(logo_path, 10, 10, 30)
         except:
             print("⚠️ Warning: Unable to load logo. Proceeding without it.")
 
+    # College Name and Exam Title
     pdf.cell(0, 10, details['college'], ln=True, align='C')
     pdf.cell(0, 10, details['exam_title'], ln=True, align='C')
     pdf.ln(5)
 
-    # Table-like structure for exam details
+    # Table for Exam Details
     pdf.set_font("Arial", "B", 10)
-    column_width = 45
-    pdf.cell(column_width, 8, f"Course code: {details['course_code']}", border=1, ln=False, align="C")
-    pdf.cell(column_width, 8, f"Course name: {details['course_name']}", border=1, ln=False, align="C")
-    pdf.cell(column_width, 8, f"Faculty: {details['faculty']}", border=1, ln=False, align="C")
-    pdf.cell(column_width, 8, f"Date: {details['date']}", border=1, ln=True, align="C")
-    pdf.cell(column_width, 8, f"Duration: {details['duration']}", border=1, ln=False, align="C")
-    pdf.cell(column_width, 8, f"Semester: {details['semester']}", border=1, ln=False, align="C")
-    pdf.cell(column_width, 8, f"Max Marks: {details['max_marks']}", border=1, ln=True, align="C")
+    column_width = 50
+    row_height = 8
+    pdf.cell(column_width, row_height, f"Course Code: {details['course_code']}", border=1, ln=False, align="C")
+    pdf.cell(column_width, row_height, f"Course Name: {details['course_name']}", border=1, ln=False, align="C")
+    pdf.cell(column_width, row_height, f"Faculty: {details['faculty']}", border=1, ln=True, align="C")
+
+    pdf.cell(column_width, row_height, f"Date: {details['date']}", border=1, ln=False, align="C")
+    pdf.cell(column_width, row_height, f"Duration: {details['duration']}", border=1, ln=False, align="C")
+    pdf.cell(column_width, row_height, f"Semester: {details['semester']}", border=1, ln=True, align="C")
+
+    pdf.cell(column_width, row_height, f"Max Marks: {details['max_marks']}", border=1, ln=True, align="C")
     pdf.ln(10)
 
+    # Section Heading
     pdf.set_font("Arial", "B", 10)
     pdf.cell(0, 8, "Answer All Questions", ln=True, align='L')
     pdf.ln(5)
@@ -104,8 +108,9 @@ def create_question_paper(questions, details, logo_path=r"C:\Users\SUBHA\Downloa
             pdf.ln(1)
         pdf.ln(5)
 
-    pdf.output("Generated_Question_Paper.pdf")
-    print("✅ PDF Saved as Generated_Question_Paper.pdf")
+    output_path = "Generated_Question_Paper.pdf"
+    pdf.output(output_path)
+    print(f"✅ PDF Saved as {output_path}")
 
 # Collect exam details
 details = {
@@ -122,8 +127,17 @@ details = {
 
 pdf_path = input("Enter Curriculum PDF Path: ")
 
-# Process
-extracted_text = extract_text_from_pdf(pdf_path)
-questions = generate_questions(extracted_text)
-create_question_paper(questions, details)
-
+# Check if PDF exists
+if not os.path.exists(pdf_path):
+    print("❌ Error: PDF file not found.")
+else:
+    extracted_text = extract_text_from_pdf(pdf_path)
+    if extracted_text:
+        questions = generate_questions(extracted_text)
+        if questions != "Error generating questions":
+            logo_path = input("Enter Logo Path (Leave blank if none): ").strip()
+            create_question_paper(questions, details, logo_path)
+        else:
+            print("❌ Failed to generate questions.")
+    else:
+        print("❌ Failed to extract text from PDF.")
