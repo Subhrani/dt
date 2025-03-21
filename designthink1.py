@@ -4,7 +4,7 @@ from fpdf import FPDF
 import os
 
 # API Credentials
-API_KEY = "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"
+API_KEY = "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"
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 def extract_text_from_pdf(pdf_path):
